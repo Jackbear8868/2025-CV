@@ -62,7 +62,7 @@ class Difference_of_Gaussian(object):
             for j in range(self.num_DoG_images_per_octave):
                 dog = cv2.subtract(gaussian_images[i * self.num_guassian_images_per_octave + j + 1], gaussian_images[i * self.num_guassian_images_per_octave + j])
                 dogs.append(dog)
-                cv2.imwrite(f"output/DoG-{i}-{j}.png",dog)
+
             dog_images.append(dogs)
 
         # Step 3: Thresholding the value and Find local extremum (local maximun and local minimum)
@@ -77,9 +77,3 @@ class Difference_of_Gaussian(object):
         keypoints = keypoints[np.lexsort((keypoints[:,1],keypoints[:,0]))] 
         return keypoints
 
-
-if __name__ == '__main__':
-    Gaussian = Difference_of_Gaussian(5)
-    path = "testdata/1.png"
-    image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    keypoints = Gaussian.get_keypoints(image)
