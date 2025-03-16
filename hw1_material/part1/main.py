@@ -14,13 +14,16 @@ def main():
     parser = argparse.ArgumentParser(description='main function of Difference of Gaussian')
     parser.add_argument('--threshold', default=5.0, type=float, help='threshold value for feature selection')
     parser.add_argument('--image_path', default='./testdata/1.png', help='path to input image')
+    parser.add_argument('--output_path', default='./output/1_output.png', help='path to input image')
     args = parser.parse_args()
 
     print('Processing %s ...'%args.image_path)
     img = cv2.imread(args.image_path, 0).astype(np.float32)
 
     ### TODO ###
-
+    dog = Difference_of_Gaussian(args.threshold)
+    keypoints = dog.get_keypoints(img)
+    plot_keypoints(img,keypoints,args.output_path)
 
 if __name__ == '__main__':
     main()
