@@ -15,11 +15,12 @@ class Joint_bilateral_filter(object):
         padded_guidance = cv2.copyMakeBorder(guidance, self.pad_w, self.pad_w, self.pad_w, self.pad_w, BORDER_TYPE).astype(np.int32)
 
         ### TODO ###
+        padded_guidance = padded_guidance / 255.0
         h, w = img.shape[:2]
-        output = np.zeros_like(img, dtype=np.float32)
+        output = np.zeros_like(img, dtype=np.float64)
 
         # Precompute spatial kernel (fixed for the entire image)
-        offset = np.arange(-self.pad_w, self.pad_w + 1, dtype=np.float32)
+        offset = np.arange(-self.pad_w, self.pad_w + 1, dtype=np.float64)
         x, y = np.meshgrid(offset, offset)
         G_s = np.exp(-(x**2 + y**2) / (2 * self.sigma_s**2))
 
