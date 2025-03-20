@@ -8,6 +8,10 @@ class Joint_bilateral_filter(object):
         self.sigma_s = sigma_s
         self.wndw_size = 6*sigma_s+1
         self.pad_w = 3*sigma_s
+        offset = np.arange(-self.pad_w, self.pad_w + 1, dtype=np.float64)
+        x, y = np.meshgrid(offset, offset)
+        self.G_s = np.exp(-(x**2 + y**2) / (2 * self.sigma_s**2))
+
     
     def joint_bilateral_filter(self, img, guidance):
         BORDER_TYPE = cv2.BORDER_REFLECT
@@ -20,9 +24,6 @@ class Joint_bilateral_filter(object):
         output = np.zeros_like(img, dtype=np.float64)
 
         # Precompute spatial kernel (fixed for the entire image)
-        offset = np.arange(-self.pad_w, self.pad_w + 1, dtype=np.float64)
-        x, y = np.meshgrid(offset, offset)
-        G_s = np.exp(-(x**2 + y**2) / (2 * self.sigma_s**2))
 
         for i in range(h):
             for j in range(w):
@@ -42,7 +43,7 @@ class Joint_bilateral_filter(object):
                     G_r = np.exp(-(diff_r + diff_g + diff_b) / (2 * self.sigma_r**2))
                 
                 # Compute final joint bilateral weights
-                weights = G_s * G_r
+                weights = self.G_s * G_r
 
                 if img.ndim == 2:  # Grayscale image
                     output[i, j] = np.sum(weights * img_window) / np.sum(weights)
