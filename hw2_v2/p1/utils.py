@@ -48,12 +48,39 @@ def get_tiny_images(img_paths: str):
     #    2. flatten and normalize the resized image.                #
     #################################################################
 
+    tiny_size = 16
     tiny_img_feats = []
+
+    for img_path in img_paths:
+        # 1. Open
+        img = Image.open(img_path)
+        
+        # 2. Crop center square
+        w, h = img.size
+        min_dim = min(w, h)
+        left = (w - min_dim) // 2
+        top = (h - min_dim) // 2
+        img = img.crop((left, top, left + min_dim, top + min_dim))
+
+        # 3. Resize to tiny image
+        img = img.resize((tiny_size, tiny_size), Image.Resampling.LANCZOS)
+
+        # 4. Convert to numpy, flatten, and normalize
+        vec = np.array(img, dtype=np.float32).flatten()
+
+        # Normalize: zero mean and unit length
+        vec -= np.mean(vec)
+        if np.linalg.norm(vec) > 0:
+            vec /= np.linalg.norm(vec)
+
+        tiny_img_feats.append(vec)
+
+    tiny_img_feats = np.vstack(tiny_img_feats)
 
     #################################################################
     #                        END OF YOUR CODE                       #
     #################################################################
-
+    
     return tiny_img_feats
 
 #########################################
@@ -64,7 +91,7 @@ def get_tiny_images(img_paths: str):
 ###### Step 1-b-1
 def build_vocabulary(
         img_paths: list, 
-        vocab_size: int = 400
+        vocab_size: int = 800
     ):
     '''
     Args:
@@ -109,7 +136,32 @@ def build_vocabulary(
     # You are welcome to use your own SIFT feature                                   #
     ##################################################################################
 
+    all_sift_descriptors = []
 
+    num = 100
+    step_size = 6
+
+    for img_path in img_paths:
+        img = Image.open(img_path)
+        img_np = np.array(img, dtype=np.float32)
+
+        # Use larger step size and fast=True for speed
+        _, descriptors = dsift(img_np, step=[step_size, step_size], fast=True)
+
+        if descriptors.shape[0] == 0:
+            continue  # skip image if no SIFT features found
+
+        # Optionally sample descriptors to reduce computation
+        if descriptors.shape[0] > num:
+            idx = np.random.choice(descriptors.shape[0], num, replace=False)
+            descriptors = descriptors[idx]
+
+        all_sift_descriptors.append(descriptors.astype(np.float32))
+
+
+    all_sift_descriptors = np.vstack(all_sift_descriptors)
+
+    vocab = kmeans(all_sift_descriptors, num_centers=vocab_size)
 
     ##################################################################################
     #                                END OF YOUR CODE                                #
@@ -157,6 +209,43 @@ def get_bags_of_sifts(
     ############################################################################
 
     img_feats = []
+    vocab_size = vocab.shape[0]
+
+    for img_path in img_paths:
+        img = Image.open(img_path)
+        img_np = np.array(img, dtype=np.float32)
+
+        # Use larger step size and fast=True for speed
+        _, descriptors = dsift(img_np, step=[7, 7], fast=True)
+
+        if descriptors.shape[0] == 0:
+            # If no features found, use zero histogram
+            hist = np.zeros(vocab_size)
+        else:
+            # Compute distances
+            distances = cdist(descriptors, vocab, metric='euclidean')
+
+            # Soft assignment: use top-k nearest visual words
+            topk = 3
+            hist = np.zeros(vocab_size, dtype=np.float32)
+
+            nearest_indices = np.argsort(distances, axis=1)[:, :topk]
+            nearest_distances = np.take_along_axis(distances, nearest_indices, axis=1)
+
+            weights = np.exp(-nearest_distances)
+            weights /= np.sum(weights, axis=1, keepdims=True)
+
+            for i in range(nearest_indices.shape[0]):
+                for j in range(topk):
+                    hist[nearest_indices[i, j]] += weights[i, j]
+
+            # Normalize histogram (RootSIFT)
+            hist = np.sqrt(hist)
+            hist /= np.linalg.norm(hist) + 1e-8
+
+        img_feats.append(hist)
+
+    img_feats = np.vstack(img_feats)
 
     ############################################################################
     #                                END OF YOUR CODE                          #
@@ -213,7 +302,33 @@ def nearest_neighbor_classify(
     #      work better, or you can also try different metrics for cdist()     #
     ###########################################################################
 
+    k = 8  # Number of neighbors to consider
+
+    # Step 0: Convert training labels to numeric IDs
+    train_label_ids = np.array([CAT2ID[label] for label in train_labels])
+    
+    # Step 1: Compute distances
+    distances = cdist(test_img_feats, train_img_feats, metric='cosine')
+
+    # Step 2: 取前 k 個最相近的 training feature
+    nearest_indices = np.argsort(distances, axis=1)[:, :k]
+
+    # Step 3: 加權投票
     test_predicts = []
+
+    for i in range(len(test_img_feats)):
+        neighbor_ids = train_label_ids[nearest_indices[i]]
+        neighbor_distances = distances[i, nearest_indices[i]]
+
+        # 轉為權重（距離越小權重越大），防止除以 0 加 1e-8
+        weights = 1.0 / (neighbor_distances + 1e-8)
+
+        # 加權投票
+        votes = np.bincount(neighbor_ids, weights=weights, minlength=len(CAT))
+        predicted_id = np.argmax(votes)
+        predicted_label = CAT[predicted_id]
+        test_predicts.append(predicted_label)
+
 
     ###########################################################################
     #                               END OF YOUR CODE                          #
