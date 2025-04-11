@@ -53,8 +53,50 @@ def plot_learning_curve(
     # plot being unsaved if early stop, so the result_lists's size #
     # is not fixed.                                                #
     ################################################################
-    
-    pass
+    epochs = range(1, len(result_lists['train_loss']) + 1)
+
+    # -- Loss: training
+    plt.figure()
+    plt.plot(epochs, result_lists['train_loss'], 'b-', label='Training Loss')
+    plt.title('Training Loss Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig(os.path.join(logfile_dir, 'train_loss_curve.png'))
+    plt.close()
+
+    # -- Loss: validation
+    plt.figure()
+    plt.plot(epochs, result_lists['val_loss'], 'r-', label='Validation Loss')
+    plt.title('Validation Loss Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig(os.path.join(logfile_dir, 'val_loss_curve.png'))
+    plt.close()
+
+    # -- Accuracy: training
+    plt.figure()
+    plt.plot(epochs, result_lists['train_acc'], 'b-', label='Training Accuracy')
+    plt.title('Training Accuracy Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.savefig(os.path.join(logfile_dir, 'train_acc_curve.png'))
+    plt.close()
+
+    # -- Accuracy: validation
+    plt.figure()
+    plt.plot(epochs, result_lists['val_acc'], 'r-', label='Validation Accuracy')
+    plt.title('Validation Accuracy Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.savefig(os.path.join(logfile_dir, 'val_acc_curve.png'))
+    plt.close()
+
+    print("save loss_curve.png & accuracy_curve.jpg.")
+
 
 def train(
         model: nn.Module,
@@ -86,6 +128,7 @@ def train(
     train_loss_list, val_loss_list = [], []
     train_acc_list, val_acc_list = [], []
     best_acc = 0.0
+    best_loss = float('inf')
 
     for epoch in range(cfg.epochs):
         ##### TRAINING #####
@@ -96,8 +139,10 @@ def train(
         for batch, data in enumerate(train_loader):
             sys.stdout.write(f'\r[{epoch + 1}/{cfg.epochs}] Train batch: {batch + 1} / {len(train_loader)}')
             sys.stdout.flush()
+
             # Data loading. (batch_size, 3, 32, 32), (batch_size)
             images, labels = data['images'].to(device), data['labels'].to(device)
+
             # Forward pass. input: (batch_size, 3, 32, 32), output: (batch_size, 10)
             pred = model(images)
             # Calculate loss.
@@ -133,14 +178,33 @@ def train(
             # You don't have to update parameters, just record the      #
             # accuracy and loss.                                        #
             #############################################################
+            # Iterate over the validation set batches.
+            for inputs, targets in val_loader:
+                # Forward pass: compute predictions.
+                inputs = data['images'].to(device)
+                targets = data['labels'].to(device)
+
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+
+                # Accumulate the loss (multiply by batch size to later average).
+                val_loss += loss.item() * inputs.size(0)
+
+                # Compute the predictions by taking the class with the highest probability.
+                _, predicted = torch.max(outputs, 1)
+
+                # Count the number of correct predictions.
+                val_correct += (predicted == targets).sum().item()
+
 
             ######################### TODO End ##########################
 
         # Print validation result
         val_time = time.time() - val_start_time
         val_acc = val_correct / len(val_loader.dataset)
+        val_acc = 1.0 if val_acc >= 1 else val_acc
         val_loss /= len(val_loader)
-        val_acc_list.append(val_acc.cpu().numpy())
+        val_acc_list.append(val_acc)
         val_loss_list.append(val_loss)
         print()
         print(f'[{epoch + 1}/{cfg.epochs}] {val_time:.2f} sec(s) Val Acc: {val_acc:.5f} | Val Loss: {val_loss:.5f}')
@@ -149,7 +213,7 @@ def train(
         scheduler.step()
 
         ##### WRITE LOG #####
-        is_better = val_acc >= best_acc
+        is_better = (val_acc > best_acc) or (val_acc == best_acc and val_loss < best_loss)
         epoch_time = train_time + val_time
         write_result_log(os.path.join(logfile_dir, 'result_log.txt'),
                          epoch, epoch_time,
@@ -163,6 +227,7 @@ def train(
             torch.save(model.state_dict(),
                        os.path.join(model_save_dir, 'model_best.pth'))
             best_acc = val_acc
+            best_loss = val_loss
 
         ##### PLOT LEARNING CURVE #####
         ##### TODO: check plot_learning_curve() in this file #####
@@ -213,7 +278,7 @@ def main():
         model = ResNet18()
     else:
         raise NameError('Unknown model type')
-
+    
     model.to(device)
 
     ##### DATALOADER #####

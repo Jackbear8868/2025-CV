@@ -74,7 +74,21 @@ def main():
         # You don't have to calculate accuracy and loss since you   #
         # don't have labels.                                        #
         #############################################################
-   
+
+        for data in test_loader:
+            # Get the input images and move them to the appropriate device
+            images = data['images'].to(device)
+            
+            # Forward pass: compute predictions
+            outputs = model(images)
+            
+            # Get the predicted class (assuming outputs are logits)
+            _, preds = torch.max(outputs, dim=1)
+            
+            # Append predictions to the list (convert to CPU and list)
+            predictions.extend(preds.cpu().numpy().tolist())
+
+
         ######################### TODO End ##########################
 
     test_time = time.time() - test_start_time
