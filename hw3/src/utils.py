@@ -19,9 +19,18 @@ def solve_homography(u, v):
         print('At least 4 points should be given')
 
     # TODO: 1.forming A
-
+    A = []
+    for i in range(N):
+        A.append([-u[i][0], -u[i][1], -1, 0, 0, 0, u[i][0]*v[i][0], u[i][1]*v[i][0],v[i][0]])
+        A.append([0, 0, 0, -u[i][0], -u[i][1], -1, u[i][0]*v[i][1], u[i][1]*v[i][1],v[i][1]])
+    A = np.array(A)
+    
     # TODO: 2.solve H with A
-
+    U, S, Vt = np.linalg.svd(A)
+    h = Vt[-1, :]
+    h = 1.0 / np.sum(h) * h
+    H = h.reshape((3,3))
+    print(H)
     return H
 
 
@@ -63,8 +72,18 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
     H_inv = np.linalg.inv(H)
 
     # TODO: 1.meshgrid the (x,y) coordinate pairs
+    x = np.arange(xmin, xmax)
+    y = np.arange(ymin, ymax)
+
+    X, Y = np.meshgrid(x, y)
 
     # TODO: 2.reshape the destination pixels as N x 3 homogeneous coordinate
+    X_flat = X.flatten()
+    Y_flat = Y.flatten()
+
+    ones = np.ones_like(X_flat)
+    coords = np.vstack([X_flat, Y_flat, ones])
+    coords = coords.T
 
     if direction == 'b':
         # TODO: 3.apply H_inv to the destination pixels and retrieve (u,v) pixels, then reshape to (ymax-ymin),(xmax-xmin)
@@ -79,13 +98,32 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
 
     elif direction == 'f':
         # TODO: 3.apply H to the source pixels and retrieve (u,v) pixels, then reshape to (ymax-ymin),(xmax-xmin)
+        warped_coords = coords @ H.T  # (N,3) * (3,3)T --> (N,3)
+
+        # Normalize
+        warped_u = warped_coords[:, 0] / warped_coords[:, 2]
+        warped_v = warped_coords[:, 1] / warped_coords[:, 2]
+
+        # Reshape回成image形狀 (y,x)
+        warped_u = warped_u.reshape((ymax - ymin, xmax - xmin))
+        warped_v = warped_v.reshape((ymax - ymin, xmax - xmin))
+
 
         # TODO: 4.calculate the mask of the transformed coordinate (should not exceed the boundaries of destination image)
+        mask = (
+            (warped_u >= 0) & (warped_u < w_dst) &
+            (warped_v >= 0) & (warped_v < h_dst)
+        )
 
         # TODO: 5.filter the valid coordinates using previous obtained mask
+        valid_u = warped_u[mask].astype(int)
+        valid_v = warped_v[mask].astype(int)
+
+        src_x = X[mask]
+        src_y = Y[mask]
 
         # TODO: 6. assign to destination image using advanced array indicing
-
-        pass
+        for c in range(ch):
+            dst[valid_v, valid_u, c] = src[src_y, src_x, c]
 
     return dst 
