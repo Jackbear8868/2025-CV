@@ -30,7 +30,7 @@ def solve_homography(u, v):
     h = Vt[-1, :]
     h = 1.0 / np.sum(h) * h
     H = h.reshape((3,3))
-    print(H)
+
     return H
 
 
@@ -87,14 +87,37 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
 
     if direction == 'b':
         # TODO: 3.apply H_inv to the destination pixels and retrieve (u,v) pixels, then reshape to (ymax-ymin),(xmax-xmin)
+        H_inv = np.linalg.inv(H)
+        # Apply H_inv
+        warped_coords = coords @ H_inv.T  # 注意是 H_inv的轉置
+
+        # Normalize homogeneous coordinates
+        warped_u = warped_coords[:, 0] / warped_coords[:, 2]
+        warped_v = warped_coords[:, 1] / warped_coords[:, 2]
+
+        # Reshape成影像形狀 (y,x)
+        warped_u = warped_u.reshape((ymax - ymin, xmax - xmin))
+        warped_v = warped_v.reshape((ymax - ymin, xmax - xmin))
 
         # TODO: 4.calculate the mask of the transformed coordinate (should not exceed the boundaries of source image)
+        mask = (
+            (warped_u >= 0) & (warped_u < w_src) &
+            (warped_v >= 0) & (warped_v < h_src)
+        )
 
         # TODO: 5.sample the source image with the masked and reshaped transformed coordinates
+        sample_u = np.round(warped_u[mask]).astype(int)
+        sample_v = np.round(warped_v[mask]).astype(int)
+
+        # 防止index超出範圍
+        sample_u = np.clip(sample_u, 0, src.shape[1] - 1)
+        sample_v = np.clip(sample_v, 0, src.shape[0] - 1)
 
         # TODO: 6. assign to destination image with proper masking
+        dst_y, dst_x = np.where(mask)  # destination上的合法位置
 
-        pass
+        for c in range(ch):
+            dst[dst_y, dst_x, c] = src[sample_v, sample_u, c]
 
     elif direction == 'f':
         # TODO: 3.apply H to the source pixels and retrieve (u,v) pixels, then reshape to (ymax-ymin),(xmax-xmin)
@@ -116,14 +139,28 @@ def warping(src, dst, H, ymin, ymax, xmin, xmax, direction='b'):
         )
 
         # TODO: 5.filter the valid coordinates using previous obtained mask
-        valid_u = warped_u[mask].astype(int)
-        valid_v = warped_v[mask].astype(int)
+        warped_u_valid = warped_u[mask]
+        warped_v_valid = warped_v[mask]
 
+        dst_x = np.round(warped_u_valid).astype(int)
+        dst_y = np.round(warped_v_valid).astype(int)
+
+        # Source是從(X,Y)來的，所以src_x, src_y也是要用mask選
         src_x = X[mask]
         src_y = Y[mask]
 
         # TODO: 6. assign to destination image using advanced array indicing
+        valid_idx = (
+            (dst_x >= 0) & (dst_x < w_dst) &
+            (dst_y >= 0) & (dst_y < h_dst)
+        )
+
+        dst_x = dst_x[valid_idx]
+        dst_y = dst_y[valid_idx]
+        src_x = src_x[valid_idx]
+        src_y = src_y[valid_idx]
+
         for c in range(ch):
-            dst[valid_v, valid_u, c] = src[src_y, src_x, c]
+            dst[dst_y, dst_x, c] = src[src_y, src_x, c]
 
     return dst 

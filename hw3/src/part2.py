@@ -28,16 +28,21 @@ def planarAR(REF_IMAGE_PATH, VIDEO_PATH):
         ret, frame = video.read()
         if ret:  ## check whethere the frame is legal, i.e., there still exists a frame
             # TODO: 1.find corners with aruco
-            # function call to aruco.detectMarkers()
+            corners, ids, rejected = aruco.detectMarkers(frame, arucoDict, parameters=arucoParameters)
 
-            # TODO: 2.find homograpy
-            # function call to solve_homography()
+            if len(corners) > 0:
+                frame_corners = corners[0].reshape(-1, 2)
 
-            # TODO: 3.apply backward warp
-            # function call to warping()
+                # TODO: 2.find homography
+                H = solve_homography(ref_corns, frame_corners)
 
+                # TODO: 3.apply backward warp
+                frame = warping(ref_image, frame, H, 0, film_h, 0, film_w, direction='b')
+            
+            # 如果沒detect到，就直接寫原本的frame
             videowriter.write(frame)
             pbar.update(1)
+
 
         else:
             break
