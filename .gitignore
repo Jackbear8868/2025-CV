@@ -1,0 +1,17 @@
+**/__pycache__/
+__pycache__/
+hw2_data/
+resource/
+7SCENES/
+RGB/
+3DR/
+Real-ESRGAN/
+ComputerVisionFinalProject/
+
+checkpoint/
+experiment/
+output/
+
+*.pkl
+
+*.docx
